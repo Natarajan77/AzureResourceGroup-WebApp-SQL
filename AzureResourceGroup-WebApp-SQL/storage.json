@@ -1,0 +1,93 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "storageAccountName": {
+            "type": "string"
+        },
+        "assetContainers": {
+            "type": "array",
+            "defaultValue":[]
+        },
+        "tableQueues" : {
+            "type": "array",
+            "defaultValue": []
+        },
+        "containersExist": {
+            "type": "string",
+            "defaultValue": "false"
+        },
+        "queuesExist" :{
+            "type": "string",
+            "defaultValue": "false"
+        }
+    },
+    "variables": {
+        "location": "[resourceGroup().location]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[parameters('storageAccountName')]",
+            "apiVersion": "2019-04-01",
+            "location": "[variables('location')]",
+            "tags": {
+                "Scripted": "Yes"
+            },
+            "kind": "StorageV2",
+            "sku": {
+                "name": "Standard_RAGRS"
+            },
+            "properties": {
+                "minimumTlsVersion": "TLS1_2",
+                "supportsHttpsTrafficOnly": true
+            }
+        },
+        {
+            "condition": "[and( equals( parameters('containersExist'), 'false' )  , greater( length( parameters('assetContainers') ), 0) )]",
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(parameters('storageAccountName'), '/default/',  if(greater(length(parameters('assetContainers')), 0),parameters('assetContainers')[copyIndex()].container, 'dummy'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts',parameters('storageAccountName'))]"
+            ],
+            "copy": {
+                "count": "[length(parameters('assetContainers'))]",
+                "name": "assetContainerCopies"
+            },
+            "tags": {
+                "Scripted": "Yes"
+            },
+            "properties": {
+                "publicAccess": "[if(greater(length(parameters('assetContainers')), 0),parameters('assetContainers')[copyIndex()].publicAccess, 'dummy')]",
+                "metadata": {
+                    "resourceGroup": "[resourceGroup().name]",
+                    "location": "[variables('location')]",
+                    "storageAccount": "[parameters('storageAccountName')]"
+                }
+            }
+        },
+        {
+            "condition": "[and( equals( parameters('queuesExist'), 'false' ) , greater( length( parameters('tableQueues') ), 0) )]",
+            "type": "Microsoft.Storage/storageAccounts/queueServices/queues",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(parameters('storageAccountName'), '/default/',  if(greater(length(parameters('tableQueues')), 0),parameters('tableQueues')[copyIndex()], 'dummy'))]",
+            "dependsOn": [
+			    "[resourceId('Microsoft.Storage/storageAccounts',parameters('storageAccountName'))]"
+			],
+            "properties": {
+                "metadata": {}
+            },
+            "copy": {
+                "name": "queueCopy",
+                "count": "[length(parameters('tableQueues'))]"
+            }
+		}
+    ],
+    "outputs": {
+        "blobUrl": {
+            "type": "string",
+            "value": "[reference(parameters('storageAccountName')).primaryEndpoints.blob]"
+        }
+    }
+}
